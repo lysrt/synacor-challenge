@@ -90,6 +90,7 @@ func (v *virtualMachine) pop() uint16 {
 
 func (v *virtualMachine) RunNextInstruction() error {
 	instruction := v.read()
+	// fmt.Println("Executing instruction", instruction)
 	switch instruction {
 	case 0:
 		// halt: 0
@@ -127,9 +128,26 @@ func (v *virtualMachine) RunNextInstruction() error {
 		} else {
 			v.setRegister(a, 0)
 		}
+	case 5:
+		// gt: 5 a b c
+		a := v.read()
+		b := v.read()
+		c := v.read()
+
+		b = v.value(b)
+		c = v.value(c)
+
+		// set <a> to 1 if <b> is greater than <c>; set it to 0 otherwise
+		if b > c {
+			v.setRegister(a, 1)
+		} else {
+			v.setRegister(a, 0)
+		}
 	case 6:
 		// jmp a
 		a := v.read()
+		// jump to <a>
+		a = v.value(a)
 		v.jump(int(a))
 	case 7:
 		// jt a b
@@ -138,7 +156,8 @@ func (v *virtualMachine) RunNextInstruction() error {
 
 		a = v.value(a)
 		if a != 0 {
-			// jump to b
+			// if <a> is nonzero, jump to <b>
+			b = v.value(b)
 			v.jump(int(b))
 		}
 	case 8:
@@ -163,6 +182,50 @@ func (v *virtualMachine) RunNextInstruction() error {
 		// assign into <a> the sum of <b> and <c> (modulo 32768)
 		sum := (b + c) % 32768
 		v.setRegister(a, sum)
+	case 12:
+		// and: 12 a b c
+		a := v.read()
+		b := v.read()
+		c := v.read()
+
+		b = v.value(b)
+		c = v.value(c)
+
+		// stores into <a> the bitwise and of <b> and <c>
+		sum := b & c
+		v.setRegister(a, sum)
+	case 13:
+		// or: 13 a b c
+
+		a := v.read()
+		b := v.read()
+		c := v.read()
+
+		b = v.value(b)
+		c = v.value(c)
+
+		// stores into <a> the bitwise or of <b> and <c>
+		sum := b | c
+		v.setRegister(a, sum)
+	case 14:
+		// not: 14 a b
+		a := v.read()
+		b := v.read()
+
+		b = v.value(b)
+		// stores 15-bit bitwise inverse of <b> in <a>
+		not := ^b & 0x7fff
+		v.setRegister(a, not)
+	case 17:
+		// call: 17 a
+		a := v.read()
+
+		// write the address of the next instruction to the stack and jump to <a>
+		next := v.address
+		v.push(uint16(next))
+
+		a = v.value(a)
+		v.jump(int(a))
 	case 19:
 		// out a
 		a := v.read()
