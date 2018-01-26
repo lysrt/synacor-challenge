@@ -182,6 +182,30 @@ func (v *virtualMachine) RunNextInstruction() error {
 		// assign into <a> the sum of <b> and <c> (modulo 32768)
 		sum := (b + c) % 32768
 		v.setRegister(a, sum)
+	case 10:
+		// mult: 10 a b c
+		a := v.read()
+		b := v.read()
+		c := v.read()
+
+		b = v.value(b)
+		c = v.value(c)
+
+		// store into <a> the product of <b> and <c> (modulo 32768)
+		product := (b * c) % 32768
+		v.setRegister(a, product)
+	case 11:
+		// mod: 11 a b c
+		a := v.read()
+		b := v.read()
+		c := v.read()
+
+		b = v.value(b)
+		c = v.value(c)
+
+		// store into <a> the remainder of <b> divided by <c>
+		remainder := b % c
+		v.setRegister(a, remainder)
 	case 12:
 		// and: 12 a b c
 		a := v.read()
