@@ -75,6 +75,19 @@ func (v *virtualMachine) setRegister(r, value uint16) {
 	v.registers[register(r)] = value
 }
 
+func (v *virtualMachine) push(value uint16) {
+	v.stack = append(v.stack, value)
+}
+
+func (v *virtualMachine) pop() uint16 {
+	if len(v.stack) == 0 {
+		panic("empty stack")
+	}
+	result := v.stack[len(v.stack)-1]
+	v.stack = v.stack[:len(v.stack)-1]
+	return result
+}
+
 func (v *virtualMachine) RunNextInstruction() error {
 	instruction := v.read()
 	switch instruction {
@@ -92,7 +105,13 @@ func (v *virtualMachine) RunNextInstruction() error {
 		a := v.read()
 		a = v.value(a)
 		// push <a> onto the stack
-		// v.push(val)
+		v.push(a)
+	case 3:
+		// pop: 3 a
+		a := v.read()
+		// remove the top element from the stack and write it into <a>; empty stack = error
+		value := v.pop()
+		v.setRegister(a, value)
 	case 4:
 		// eq: 4 a b c
 		a := v.read()
