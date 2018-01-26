@@ -12,7 +12,7 @@ const (
 )
 
 type virtualMachine struct {
-	memory     map[uint16]int16
+	memory     map[uint16]uint16
 	registers  [8]uint16
 	stack      []uint16
 	address    int
@@ -34,7 +34,7 @@ func NewVirtualMachine(r io.Reader) *virtualMachine {
 	}
 
 	vm := virtualMachine{
-		memory:    make(map[uint16]int16),
+		memory:    make(map[uint16]uint16),
 		registers: [8]uint16{0, 0, 0, 0, 0, 0, 0, 0},
 		stack:     make([]uint16, 0),
 		input:     u,
@@ -86,6 +86,14 @@ func (v *virtualMachine) pop() uint16 {
 	result := v.stack[len(v.stack)-1]
 	v.stack = v.stack[:len(v.stack)-1]
 	return result
+}
+
+func (v *virtualMachine) readMemory(address uint16) uint16 {
+	return v.memory[address]
+}
+
+func (v *virtualMachine) writeMemory(address, value uint16) {
+	v.memory[address] = value
 }
 
 func (v *virtualMachine) RunNextInstruction() error {
@@ -240,6 +248,15 @@ func (v *virtualMachine) RunNextInstruction() error {
 		// stores 15-bit bitwise inverse of <b> in <a>
 		not := ^b & 0x7fff
 		v.setRegister(a, not)
+	case 15:
+		// rmem: 15 a b
+		a := v.read()
+		b := v.read()
+
+		// read memory at address <b> and write it to <a>
+		b = v.value(b)
+		value := v.readMemory(b)
+		v.setRegister(a, value)
 	case 17:
 		// call: 17 a
 		a := v.read()
