@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 )
 
 const (
@@ -12,11 +14,10 @@ const (
 )
 
 type virtualMachine struct {
-	memory     map[uint16]uint16
 	registers  [8]uint16
 	stack      []uint16
-	address    int
-	input      []uint16
+	address    uint16
+	memory     []uint16
 	terminated bool
 }
 
@@ -34,22 +35,21 @@ func NewVirtualMachine(r io.Reader) *virtualMachine {
 	}
 
 	vm := virtualMachine{
-		memory:    make(map[uint16]uint16),
 		registers: [8]uint16{0, 0, 0, 0, 0, 0, 0, 0},
 		stack:     make([]uint16, 0),
-		input:     u,
+		memory:    u,
 	}
 
 	return &vm
 }
 
 func (v *virtualMachine) read() uint16 {
-	result := v.input[v.address]
+	result := v.memory[v.address]
 	v.address++
 	return result
 }
 
-func (v *virtualMachine) jump(address int) {
+func (v *virtualMachine) jump(address uint16) {
 	v.address = address
 }
 
@@ -79,13 +79,13 @@ func (v *virtualMachine) push(value uint16) {
 	v.stack = append(v.stack, value)
 }
 
-func (v *virtualMachine) pop() uint16 {
+func (v *virtualMachine) pop() (uint16, error) {
 	if len(v.stack) == 0 {
-		panic("empty stack")
+		return 0, errors.New("empty stack")
 	}
 	result := v.stack[len(v.stack)-1]
 	v.stack = v.stack[:len(v.stack)-1]
-	return result
+	return result, nil
 }
 
 func (v *virtualMachine) readMemory(address uint16) uint16 {
@@ -96,9 +96,8 @@ func (v *virtualMachine) writeMemory(address, value uint16) {
 	v.memory[address] = value
 }
 
-func (v *virtualMachine) RunNextInstruction() error {
+func (v *virtualMachine) RunNextInstruction() {
 	instruction := v.read()
-	// fmt.Println("Executing instruction", instruction)
 	switch instruction {
 	case 0:
 		// halt: 0
@@ -107,6 +106,7 @@ func (v *virtualMachine) RunNextInstruction() error {
 		// set: 1 a b
 		a := v.read()
 		b := v.read()
+		b = v.value(b)
 		//set register <a> to the value of <b>
 		v.setRegister(a, b)
 	case 2:
@@ -119,7 +119,10 @@ func (v *virtualMachine) RunNextInstruction() error {
 		// pop: 3 a
 		a := v.read()
 		// remove the top element from the stack and write it into <a>; empty stack = error
-		value := v.pop()
+		value, err := v.pop()
+		if err != nil {
+			panic("pop empty stack")
+		}
 		v.setRegister(a, value)
 	case 4:
 		// eq: 4 a b c
@@ -156,7 +159,7 @@ func (v *virtualMachine) RunNextInstruction() error {
 		a := v.read()
 		// jump to <a>
 		a = v.value(a)
-		v.jump(int(a))
+		v.jump(a)
 	case 7:
 		// jt a b
 		a := v.read()
@@ -166,7 +169,7 @@ func (v *virtualMachine) RunNextInstruction() error {
 		if a != 0 {
 			// if <a> is nonzero, jump to <b>
 			b = v.value(b)
-			v.jump(int(b))
+			v.jump(b)
 		}
 	case 8:
 		// jf a b
@@ -175,8 +178,9 @@ func (v *virtualMachine) RunNextInstruction() error {
 
 		a = v.value(a)
 		if a == 0 {
-			// jump to b
-			v.jump(int(b))
+			// if <a> is zero, jump to <b>
+			b = v.value(b)
+			v.jump(b)
 		}
 	case 9:
 		// add: 9 a b c
@@ -228,7 +232,6 @@ func (v *virtualMachine) RunNextInstruction() error {
 		v.setRegister(a, sum)
 	case 13:
 		// or: 13 a b c
-
 		a := v.read()
 		b := v.read()
 		c := v.read()
@@ -257,6 +260,15 @@ func (v *virtualMachine) RunNextInstruction() error {
 		b = v.value(b)
 		value := v.readMemory(b)
 		v.setRegister(a, value)
+	case 16:
+		// wmem: 16 a b
+		a := v.read()
+		b := v.read()
+
+		// write the value from <b> into memory at address <a>
+		a = v.value(a)
+		b = v.value(b)
+		v.writeMemory(a, b)
 	case 17:
 		// call: 17 a
 		a := v.read()
@@ -266,16 +278,33 @@ func (v *virtualMachine) RunNextInstruction() error {
 		v.push(uint16(next))
 
 		a = v.value(a)
-		v.jump(int(a))
+		v.jump(a)
+	case 18:
+		// ret: 18
+		// remove the top element from the stack and jump to it; empty stack = halt
+		value, err := v.pop()
+		if err != nil {
+			v.terminated = true
+			break
+		}
+		v.jump(value)
 	case 19:
 		// out a
 		a := v.read()
+		a = v.value(a)
 		fmt.Print(string(a))
+	case 20:
+		// in: 20 a
+		a := v.read()
+		// read a character from the terminal and write its ascii code to <a>;
+		// it can be assumed that once input starts, it will continue until a newline is encountered;
+		// this means that you can safely read whole lines from the keyboard and trust that they will be fully read
+		buf := make([]byte, 1)
+		os.Stdin.Read(buf)
+		v.setRegister(a, uint16(buf[0]))
 	case 21:
 		// noop
 	default:
-		return fmt.Errorf("Unknown operation: %d", instruction)
+		panic(fmt.Sprintf("Unknown operation: %d", instruction))
 	}
-
-	return nil
 }

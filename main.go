@@ -19,11 +19,7 @@ func main() {
 	fmt.Println()
 
 	for !vm.terminated {
-		err := vm.RunNextInstruction()
-		if err != nil {
-			log.Fatalf("fatal vm error: %q", err)
-			break
-		}
+		vm.RunNextInstruction()
 	}
 
 	log.Println("VM terminated successfully")
